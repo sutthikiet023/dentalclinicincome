@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>คลินิกทันตกรรมบ้านฟัน - ระบบรายงาน</title>
     
     <!-- Tailwind CSS for styling -->
@@ -120,15 +120,21 @@
                                 <button id="showMonthlyViewBtn" class="px-4 py-2 text-sm font-bold bg-cyan-600 text-white rounded-md shadow">มุมมองรายเดือน</button>
                                 <button id="showAnnualViewBtn" class="px-4 py-2 text-sm font-bold bg-gray-200 text-gray-700 rounded-md">มุมมองรายปี</button>
                             </div>
-                            <!-- Monthly Filter -->
-                            <div id="monthlyFilterContainer" class="flex items-center gap-2">
-                                <label for="month_filter" class="text-sm font-medium">เลือกเดือน:</label>
-                                <input type="month" id="month_filter" class="rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
-                            </div>
-                            <!-- Annual Filter -->
-                            <div id="annualFilterContainer" class="flex items-center gap-2 hidden">
-                                <label for="year_filter" class="text-sm font-medium">เลือกปี:</label>
-                                <input type="number" id="year_filter" class="w-28 rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500" placeholder="เช่น 2025">
+                            <!-- Filters -->
+                            <div class="flex items-center gap-4">
+                                <!-- Monthly Filter -->
+                                <div id="monthlyFilterContainer" class="flex items-center gap-2">
+                                    <label for="month_filter" class="text-sm font-medium">เลือกเดือน:</label>
+                                    <input type="month" id="month_filter" class="rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                                </div>
+                                <!-- Annual Filter -->
+                                <div id="annualFilterContainer" class="flex items-center gap-2 hidden">
+                                    <label for="year_filter" class="text-sm font-medium">เลือกปี:</label>
+                                    <input type="number" id="year_filter" class="w-28 rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500" placeholder="เช่น 2025">
+                                </div>
+                                <button id="exportCsvBtn" class="px-4 py-2 text-sm font-bold bg-green-600 text-white rounded-md hover:bg-green-700 shadow">
+                                    ส่งออกเป็น .csv
+                                </button>
                             </div>
                         </div>
                         
@@ -244,6 +250,7 @@
     const annualFilterContainer = document.getElementById('annualFilterContainer');
     const monthFilter = document.getElementById('month_filter');
     const yearFilter = document.getElementById('year_filter');
+    const exportCsvBtn = document.getElementById('exportCsvBtn');
     const annualViewYear = document.getElementById('annualViewYear');
     const recordForm = document.getElementById('recordForm');
     const recordsTableBody = document.getElementById('recordsTableBody');
@@ -454,6 +461,69 @@
         }
     }
 
+    async function exportDataToCsv() {
+        if (!monthlyView.classList.contains('hidden')) {
+            const [year, month] = monthFilter.value.split('-').map(Number);
+            
+            const endDate = `${year}-${String(month).padStart(2, '0')}-25`;
+            let startYear = year;
+            let startMonth = month - 1;
+            if (startMonth === 0) {
+                startMonth = 12;
+                startYear = year - 1;
+            }
+            const startDate = `${startYear}-${String(startMonth).padStart(2, '0')}-26`;
+
+            const { data, error } = await supabaseClient
+                .from('daily_records')
+                .select('*')
+                .gte('date', startDate)
+                .lte('date', endDate)
+                .order('date', { ascending: true });
+
+            if (error || !data || data.length === 0) {
+                showToast('ไม่มีข้อมูลให้ส่งออก', true);
+                return;
+            }
+
+            const headers = ['วันที่', 'รายรับทั้งหมด', 'ค่า Lab', 'คงเหลือ (ก่อนหาร)', 'รับจริง (หาร 2)', 'จำนวนคนไข้', 'หมายเหตุ'];
+            let csvContent = headers.join(',') + '\n';
+
+            data.forEach(record => {
+                const remaining = record.income - record.lab_cost;
+                const actualTakeHome = remaining / 2;
+                const notes = record.notes ? `"${record.notes.replace(/"/g, '""')}"` : '';
+                
+                const row = [
+                    record.date,
+                    record.income,
+                    record.lab_cost,
+                    remaining,
+                    actualTakeHome,
+                    record.patient_count,
+                    notes
+                ].join(',');
+                csvContent += row + '\n';
+            });
+            
+            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            if (link.download !== undefined) { 
+                const url = URL.createObjectURL(blob);
+                const filename = `report-${year}-${String(month).padStart(2, '0')}.csv`;
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast('กำลังดาวน์โหลดไฟล์ CSV...');
+            }
+        } else {
+            showToast('การส่งออกทำได้เฉพาะในมุมมองรายเดือนเท่านั้น', true);
+        }
+    }
+
     function refreshCurrentView() {
         if (!monthlyView.classList.contains('hidden')) {
             const [year, month] = monthFilter.value.split('-').map(Number);
@@ -470,6 +540,7 @@
         annualView.classList.toggle('hidden', isMonthly);
         monthlyFilterContainer.classList.toggle('hidden', !isMonthly);
         annualFilterContainer.classList.toggle('hidden', isMonthly);
+        exportCsvBtn.classList.toggle('hidden', !isMonthly);
         
         showMonthlyViewBtn.classList.toggle('bg-cyan-600', isMonthly);
         showMonthlyViewBtn.classList.toggle('text-white', isMonthly);
@@ -541,6 +612,7 @@
     yearFilter.addEventListener('change', refreshCurrentView);
     showMonthlyViewBtn.addEventListener('click', () => switchView('monthly'));
     showAnnualViewBtn.addEventListener('click', () => switchView('annual'));
+    exportCsvBtn.addEventListener('click', exportDataToCsv);
     
     recordsTableBody.addEventListener('click', (event) => {
         const target = event.target;
