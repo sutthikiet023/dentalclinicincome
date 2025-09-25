@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale-1.0">
     <title>คลินิกทันตกรรมบ้านฟัน - ระบบรายงาน</title>
     
     <!-- Tailwind CSS for styling -->
@@ -135,7 +135,7 @@
                         <!-- Monthly View -->
                         <div id="monthlyView">
                             <h2 class="text-2xl font-bold text-cyan-600 mb-4">สรุปข้อมูลรายเดือน</h2>
-                            <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+                            <div id="summary-cards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-6"></div>
                             <div class="overflow-x-auto">
                                 <table class="min-w-full divide-y divide-gray-200">
                                     <thead class="bg-gray-100">
@@ -170,10 +170,12 @@
         </div>
     </div>
     
-    <!-- Toast Notification & Modal (unchanged) -->
+    <!-- Toast Notification -->
     <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 z-50">
         <p id="toast-message"></p>
     </div>
+
+    <!-- Delete Modal -->
     <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
             <h3 class="text-lg font-bold mb-4">ยืนยันการลบ</h3>
@@ -182,6 +184,39 @@
                 <button id="cancelDelete" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">ยกเลิก</button>
                 <button id="confirmDelete" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">ยืนยันการลบ</button>
             </div>
+        </div>
+    </div>
+    
+    <!-- Edit Modal -->
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-lg">
+            <h3 class="text-xl font-bold mb-4 border-b pb-2">แก้ไขรายการ</h3>
+            <form id="editForm" class="space-y-4 mt-4">
+                <div>
+                    <label for="edit-date" class="block text-sm font-medium text-gray-700">วันที่</label>
+                    <input type="date" id="edit-date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="edit-income" class="block text-sm font-medium text-gray-700">รายรับทั้งหมด (บาท)</label>
+                    <input type="number" id="edit-income" min="0" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="edit-lab_cost" class="block text-sm font-medium text-gray-700">ค่า Lab (บาท)</label>
+                    <input type="number" id="edit-lab_cost" min="0" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="edit-patient_count" class="block text-sm font-medium text-gray-700">จำนวนคนไข้</label>
+                    <input type="number" id="edit-patient_count" min="0" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="edit-notes" class="block text-sm font-medium text-gray-700">หมายเหตุ</label>
+                    <textarea id="edit-notes" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500"></textarea>
+                </div>
+                <div class="flex justify-end gap-4 pt-4">
+                    <button type="button" id="cancelEdit" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">ยกเลิก</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700">บันทึกการเปลี่ยนแปลง</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -217,12 +252,18 @@
     const annualChartCanvas = document.getElementById('annualChart').getContext('2d');
     const noDataAnnual = document.getElementById('no-data-annual');
     let annualChartInstance;
+    
+    // Modals and Toasts
     const toast = document.getElementById('toast');
     const toastMessage = document.getElementById('toast-message');
     const deleteModal = document.getElementById('deleteModal');
     const cancelDeleteBtn = document.getElementById('cancelDelete');
     const confirmDeleteBtn = document.getElementById('confirmDelete');
+    const editModal = document.getElementById('editModal');
+    const editForm = document.getElementById('editForm');
+    const cancelEditBtn = document.getElementById('cancelEdit');
     let recordIdToDelete = null;
+    let recordIdToEdit = null;
 
     // --- 3. Helper Functions ---
     const formatCurrency = (num) => num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -283,7 +324,8 @@
                     <td class="px-6 py-4 whitespace-nowrap text-center">${record.patient_count}</td>
                     <td class="px-6 py-4 whitespace-normal text-left text-gray-500 text-xs">${record.notes || ''}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-center">
-                        <button class="delete-btn text-red-500 hover:text-red-700" data-id="${record.id}">ลบ</button>
+                        <button class="edit-btn text-cyan-500 hover:text-cyan-700 font-medium mr-2" data-id="${record.id}">แก้ไข</button>
+                        <button class="delete-btn text-red-500 hover:text-red-700 font-medium" data-id="${record.id}">ลบ</button>
                     </td>
                 </tr>`;
             recordsTableBody.innerHTML += row;
@@ -293,8 +335,9 @@
         const totalActualTakeHome = totalRemaining / 2;
         summaryCardsContainer.innerHTML = `
             <div class="p-4 rounded-lg bg-green-50 border-green-500 summary-card"><p class="text-sm text-gray-500">รายรับรวม</p><p class="text-2xl font-bold">${formatCurrency(totalIncome)}</p></div>
-            <div class="p-4 rounded-lg bg-blue-50 border-blue-500 summary-card"><p class="text-sm text-gray-500">รับจริงทั้งหมด</p><p class="text-2xl font-bold">${formatCurrency(totalActualTakeHome)}</p></div>
             <div class="p-4 rounded-lg bg-red-50 border-red-500 summary-card"><p class="text-sm text-gray-500">ค่า Lab รวม</p><p class="text-2xl font-bold">${formatCurrency(totalLabCost)}</p></div>
+            <div class="p-4 rounded-lg bg-orange-50 border-orange-500 summary-card"><p class="text-sm text-gray-500">รายรับหลังหัก Lab</p><p class="text-2xl font-bold">${formatCurrency(totalRemaining)}</p></div>
+            <div class="p-4 rounded-lg bg-blue-50 border-blue-500 summary-card"><p class="text-sm text-gray-500">รับจริงทั้งหมด</p><p class="text-2xl font-bold">${formatCurrency(totalActualTakeHome)}</p></div>
             <div class="p-4 rounded-lg bg-purple-50 border-purple-500 summary-card"><p class="text-sm text-gray-500">คนไข้ทั้งหมด</p><p class="text-2xl font-bold">${totalPatients.toLocaleString('th-TH')}</p></div>`;
     }
 
@@ -385,6 +428,32 @@
         closeDeleteModal();
     }
     
+    async function handleUpdateRecord(event) {
+        event.preventDefault();
+        if (!recordIdToEdit) return;
+
+        const updatedRecord = {
+            date: document.getElementById('edit-date').value,
+            income: parseFloat(document.getElementById('edit-income').value),
+            lab_cost: parseFloat(document.getElementById('edit-lab_cost').value),
+            patient_count: parseInt(document.getElementById('edit-patient_count').value),
+            notes: document.getElementById('edit-notes').value
+        };
+
+        const { error } = await supabaseClient
+            .from('daily_records')
+            .update(updatedRecord)
+            .eq('id', recordIdToEdit);
+        
+        if (error) {
+            showToast('เกิดข้อผิดพลาดในการอัปเดต: ' + error.message, true);
+        } else {
+            showToast('อัปเดตข้อมูลสำเร็จ!');
+            closeEditModal();
+            refreshCurrentView();
+        }
+    }
+
     function refreshCurrentView() {
         if (!monthlyView.classList.contains('hidden')) {
             const [year, month] = monthFilter.value.split('-').map(Number);
@@ -413,9 +482,30 @@
         if (isMonthly) { refreshCurrentView(); }
         else { displayAnnualSummary(parseInt(yearFilter.value)); }
     }
-
+    
+    // --- Modal Functions ---
     function openDeleteModal(id) { recordIdToDelete = id; deleteModal.classList.remove('hidden'); }
     function closeDeleteModal() { recordIdToDelete = null; deleteModal.classList.add('hidden'); }
+    function closeEditModal() { recordIdToEdit = null; editModal.classList.add('hidden'); }
+
+    async function openEditModal(id) {
+        recordIdToEdit = id;
+        const { data: record, error } = await supabaseClient.from('daily_records').select('*').eq('id', id).single();
+
+        if (error) {
+            console.error('Error fetching record for edit:', error);
+            showToast('ไม่สามารถดึงข้อมูลสำหรับแก้ไขได้', true);
+            return;
+        }
+
+        document.getElementById('edit-date').value = record.date;
+        document.getElementById('edit-income').value = record.income;
+        document.getElementById('edit-lab_cost').value = record.lab_cost;
+        document.getElementById('edit-patient_count').value = record.patient_count;
+        document.getElementById('edit-notes').value = record.notes || '';
+        editModal.classList.remove('hidden');
+    }
+
 
     // --- 7. Auth Functions ---
     async function handleLogin(event) {
@@ -432,7 +522,6 @@
             loginMessage.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
             loginMessage.classList.remove('hidden');
         }
-        // onAuthStateChange will handle successful login
     }
 
     async function handleLogout() {
@@ -441,24 +530,30 @@
             console.error('Logout error:', error.message);
             showToast('เกิดข้อผิดพลาดในการออกจากระบบ', true);
         }
-        // onAuthStateChange will handle successful logout
     }
 
     // --- 8. Event Listeners ---
     loginForm.addEventListener('submit', handleLogin);
     logoutBtn.addEventListener('click', handleLogout);
     recordForm.addEventListener('submit', addRecord);
+    editForm.addEventListener('submit', handleUpdateRecord);
     monthFilter.addEventListener('change', refreshCurrentView);
     yearFilter.addEventListener('change', refreshCurrentView);
     showMonthlyViewBtn.addEventListener('click', () => switchView('monthly'));
     showAnnualViewBtn.addEventListener('click', () => switchView('annual'));
+    
     recordsTableBody.addEventListener('click', (event) => {
-        if (event.target.classList.contains('delete-btn')) {
-            openDeleteModal(event.target.getAttribute('data-id'));
+        const target = event.target;
+        if (target.classList.contains('delete-btn')) {
+            openDeleteModal(target.getAttribute('data-id'));
+        } else if (target.classList.contains('edit-btn')) {
+            openEditModal(target.getAttribute('data-id'));
         }
     });
+    
     cancelDeleteBtn.addEventListener('click', closeDeleteModal);
     confirmDeleteBtn.addEventListener('click', () => { if (recordIdToDelete) deleteRecord(recordIdToDelete); });
+    cancelEditBtn.addEventListener('click', closeEditModal);
 
     // --- 9. Initial Page Load and Auth State Handling ---
     function initializeApp() {
@@ -476,12 +571,10 @@
     // Listen for auth state changes (login/logout)
     supabaseClient.auth.onAuthStateChange((event, session) => {
         if (session) {
-            // User is logged in
             authContainer.classList.add('hidden');
             appContainer.classList.remove('hidden');
-            initializeApp(); // Load the main application data
+            initializeApp();
         } else {
-            // User is logged out
             authContainer.classList.remove('hidden');
             appContainer.classList.add('hidden');
         }
