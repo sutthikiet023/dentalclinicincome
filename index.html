@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>คลินิกทันตกรรมบ้านฟัน - ระบบรายงาน</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Google Fonts (Sarabun for Thai) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Use Sarabun font as the default */
+        body {
+            font-family: 'Sarabun', sans-serif;
+        }
+        /* Custom styles for better appearance */
+        .card {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        .summary-card {
+            border-left: 5px solid;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Auth Container -->
+    <div id="auth-container" class="min-h-screen flex items-center justify-center bg-gray-100">
+        <div class="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+            <div class="text-center">
+                <h1 class="text-3xl font-bold text-cyan-700">คลินิกทันตกรรมบ้านฟัน</h1>
+                <p class="text-gray-500 mt-2">กรุณาเข้าสู่ระบบ</p>
+            </div>
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700">อีเมล</label>
+                    <input type="email" id="email" required class="mt-1 block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <div>
+                    <label for="password" class="block text-sm font-medium text-gray-700">รหัสผ่าน</label>
+                    <input type="password" id="password" required class="mt-1 block w-full px-4 py-2 rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                </div>
+                <p id="login-message" class="text-red-500 text-sm text-center hidden"></p>
+                <button type="submit" class="w-full bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-700 transition duration-300 shadow-md">
+                    เข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- App Container (Hidden by default) -->
+    <div id="app-container" class="hidden">
+        <div class="container mx-auto p-4 md:p-8 max-w-7xl">
+            <!-- Header -->
+            <header class="flex justify-between items-center text-center mb-8">
+                <div></div> <!-- Spacer -->
+                <div class="flex-grow">
+                    <h1 class="text-4xl font-bold text-cyan-700">คลินิกทันตกรรมบ้านฟัน</h1>
+                    <p class="text-gray-500 mt-2">ระบบรายงานรายรับและสรุปผลประจำเดือน/ปี</p>
+                </div>
+                <button id="logoutBtn" class="bg-red-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-600 transition duration-300 shadow-sm">
+                    ออกจากระบบ
+                </button>
+            </header>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Left Column: Input Form -->
+                <div class="lg:col-span-1">
+                    <div class="card p-6 sticky top-8">
+                        <h2 class="text-2xl font-bold mb-4 border-b pb-2 text-cyan-600">บันทึกรายการใหม่</h2>
+                        <form id="recordForm" class="space-y-4">
+                            <div>
+                                <label for="date" class="block text-sm font-medium text-gray-700">วันที่</label>
+                                <input type="date" id="date" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <div>
+                                <label for="income" class="block text-sm font-medium text-gray-700">รายรับทั้งหมด (บาท)</label>
+                                <input type="number" id="income" min="0" placeholder="เช่น 15000" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <div>
+                                <label for="lab_cost" class="block text-sm font-medium text-gray-700">ค่า Lab (บาท)</label>
+                                <input type="number" id="lab_cost" min="0" placeholder="เช่น 2500" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <div>
+                                <label for="patient_count" class="block text-sm font-medium text-gray-700">จำนวนคนไข้</label>
+                                <input type="number" id="patient_count" min="0" placeholder="เช่น 10" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <div>
+                                <label for="notes" class="block text-sm font-medium text-gray-700">หมายเหตุ</label>
+                                <textarea id="notes" rows="3" placeholder="รายละเอียดเพิ่มเติม..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500"></textarea>
+                            </div>
+                            <button type="submit" class="w-full bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-cyan-700 transition duration-300 shadow-md">
+                                บันทึกข้อมูล
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Right Column: Data Display -->
+                <div class="lg:col-span-2">
+                    <div class="card p-6">
+                        <!-- View Toggles and Filters -->
+                        <div class="flex flex-wrap items-center justify-between mb-4 gap-4 border-b pb-4">
+                            <div class="flex items-center gap-2">
+                                <button id="showMonthlyViewBtn" class="px-4 py-2 text-sm font-bold bg-cyan-600 text-white rounded-md shadow">มุมมองรายเดือน</button>
+                                <button id="showAnnualViewBtn" class="px-4 py-2 text-sm font-bold bg-gray-200 text-gray-700 rounded-md">มุมมองรายปี</button>
+                            </div>
+                            <!-- Monthly Filter -->
+                            <div id="monthlyFilterContainer" class="flex items-center gap-2">
+                                <label for="month_filter" class="text-sm font-medium">เลือกเดือน:</label>
+                                <input type="month" id="month_filter" class="rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500">
+                            </div>
+                            <!-- Annual Filter -->
+                            <div id="annualFilterContainer" class="flex items-center gap-2 hidden">
+                                <label for="year_filter" class="text-sm font-medium">เลือกปี:</label>
+                                <input type="number" id="year_filter" class="w-28 rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500" placeholder="เช่น 2025">
+                            </div>
+                        </div>
+                        
+                        <!-- Monthly View -->
+                        <div id="monthlyView">
+                            <h2 class="text-2xl font-bold text-cyan-600 mb-4">สรุปข้อมูลรายเดือน</h2>
+                            <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6"></div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">วันที่</th>
+                                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">รายรับ</th>
+                                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">ค่า Lab</th>
+                                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">คงเหลือ</th>
+                                            <th class="px-6 py-3 text-right text-xs font-bold text-gray-600 uppercase tracking-wider">รับจริง</th>
+                                            <th class="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">คนไข้</th>
+                                            <th class="px-6 py-3 text-left text-xs font-bold text-gray-600 uppercase tracking-wider">หมายเหตุ</th>
+                                            <th class="px-6 py-3 text-center text-xs font-bold text-gray-600 uppercase tracking-wider">จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recordsTableBody" class="bg-white divide-y divide-gray-200"></tbody>
+                                </table>
+                                <div id="no-data-monthly" class="text-center py-8 text-gray-500 hidden"><p>ยังไม่มีข้อมูลสำหรับเดือนนี้</p></div>
+                            </div>
+                        </div>
+
+                        <!-- Annual View -->
+                        <div id="annualView" class="hidden">
+                            <h2 class="text-2xl font-bold text-cyan-600 mb-4">สรุปข้อมูลรายปี <span id="annualViewYear"></span></h2>
+                            <div class="mb-6">
+                                <canvas id="annualChart"></canvas>
+                            </div>
+                            <div id="no-data-annual" class="text-center py-8 text-gray-500 hidden"><p>ยังไม่มีข้อมูลสำหรับปีนี้</p></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Notification & Modal (unchanged) -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 z-50">
+        <p id="toast-message"></p>
+    </div>
+    <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-lg font-bold mb-4">ยืนยันการลบ</h3>
+            <p class="text-gray-600 mb-6">คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้? การกระทำนี้ไม่สามารถย้อนกลับได้</p>
+            <div class="flex justify-end gap-4">
+                <button id="cancelDelete" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">ยกเลิก</button>
+                <button id="confirmDelete" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">ยืนยันการลบ</button>
+            </div>
+        </div>
+    </div>
+
+
+<script>
+    // --- 1. Supabase Client Setup ---
+    const SUPABASE_URL = 'https://nekghcpcuqsrxetiqvmn.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5la2doY3BjdXFzcnhldGlxdm1uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NzA0ODAsImV4cCI6MjA3MDI0NjQ4MH0.343Oimw3xQNF81k0QTijupa4Wzs0kbTYffxjhL12DMY';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // --- 2. DOM Element References ---
+    // Auth elements
+    const authContainer = document.getElementById('auth-container');
+    const appContainer = document.getElementById('app-container');
+    const loginForm = document.getElementById('loginForm');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginMessage = document.getElementById('login-message');
+
+    // App elements
+    const monthlyView = document.getElementById('monthlyView');
+    const annualView = document.getElementById('annualView');
+    const showMonthlyViewBtn = document.getElementById('showMonthlyViewBtn');
+    const showAnnualViewBtn = document.getElementById('showAnnualViewBtn');
+    const monthlyFilterContainer = document.getElementById('monthlyFilterContainer');
+    const annualFilterContainer = document.getElementById('annualFilterContainer');
+    const monthFilter = document.getElementById('month_filter');
+    const yearFilter = document.getElementById('year_filter');
+    const annualViewYear = document.getElementById('annualViewYear');
+    const recordForm = document.getElementById('recordForm');
+    const recordsTableBody = document.getElementById('recordsTableBody');
+    const summaryCardsContainer = document.getElementById('summary-cards');
+    const noDataMonthly = document.getElementById('no-data-monthly');
+    const annualChartCanvas = document.getElementById('annualChart').getContext('2d');
+    const noDataAnnual = document.getElementById('no-data-annual');
+    let annualChartInstance;
+    const toast = document.getElementById('toast');
+    const toastMessage = document.getElementById('toast-message');
+    const deleteModal = document.getElementById('deleteModal');
+    const cancelDeleteBtn = document.getElementById('cancelDelete');
+    const confirmDeleteBtn = document.getElementById('confirmDelete');
+    let recordIdToDelete = null;
+
+    // --- 3. Helper Functions ---
+    const formatCurrency = (num) => num.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    function showToast(message, isError = false) {
+        toastMessage.textContent = message;
+        toast.classList.remove('bg-green-500', 'bg-red-500');
+        toast.classList.add(isError ? 'bg-red-500' : 'bg-green-500', 'opacity-100');
+        setTimeout(() => {
+            toast.classList.remove('opacity-100');
+        }, 3000);
+    }
+
+    // --- 4. Core Monthly View Functions ---
+    async function fetchMonthlyRecords(year, month) {
+        const endDate = `${year}-${String(month).padStart(2, '0')}-25`;
+        let startYear = year;
+        let startMonth = month - 1;
+        if (startMonth === 0) {
+            startMonth = 12;
+            startYear = year - 1;
+        }
+        const startDate = `${startYear}-${String(startMonth).padStart(2, '0')}-26`;
+
+        const { data, error } = await supabaseClient
+            .from('daily_records')
+            .select('*')
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date', { ascending: false });
+
+        if (error) {
+            console.error('Error fetching records:', error);
+            showToast('เกิดข้อผิดพลาดในการดึงข้อมูล', true);
+            return;
+        }
+
+        recordsTableBody.innerHTML = '';
+        noDataMonthly.classList.toggle('hidden', data.length > 0);
+        summaryCardsContainer.innerHTML = '';
+
+        if (data.length === 0) return;
+        
+        let totalIncome = 0, totalLabCost = 0, totalPatients = 0;
+        data.forEach(record => {
+            const remaining = record.income - record.lab_cost;
+            const actualTakeHome = remaining / 2;
+            totalIncome += record.income;
+            totalLabCost += record.lab_cost;
+            totalPatients += record.patient_count;
+            const row = `
+                <tr class="hover:bg-gray-50 text-sm">
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${record.date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-green-600 font-medium">${formatCurrency(record.income)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-red-600">${formatCurrency(record.lab_cost)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">${formatCurrency(remaining)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-blue-600 font-bold">${formatCurrency(actualTakeHome)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">${record.patient_count}</td>
+                    <td class="px-6 py-4 whitespace-normal text-left text-gray-500 text-xs">${record.notes || ''}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        <button class="delete-btn text-red-500 hover:text-red-700" data-id="${record.id}">ลบ</button>
+                    </td>
+                </tr>`;
+            recordsTableBody.innerHTML += row;
+        });
+
+        const totalRemaining = totalIncome - totalLabCost;
+        const totalActualTakeHome = totalRemaining / 2;
+        summaryCardsContainer.innerHTML = `
+            <div class="p-4 rounded-lg bg-green-50 border-green-500 summary-card"><p class="text-sm text-gray-500">รายรับรวม</p><p class="text-2xl font-bold">${formatCurrency(totalIncome)}</p></div>
+            <div class="p-4 rounded-lg bg-blue-50 border-blue-500 summary-card"><p class="text-sm text-gray-500">รับจริงทั้งหมด</p><p class="text-2xl font-bold">${formatCurrency(totalActualTakeHome)}</p></div>
+            <div class="p-4 rounded-lg bg-red-50 border-red-500 summary-card"><p class="text-sm text-gray-500">ค่า Lab รวม</p><p class="text-2xl font-bold">${formatCurrency(totalLabCost)}</p></div>
+            <div class="p-4 rounded-lg bg-purple-50 border-purple-500 summary-card"><p class="text-sm text-gray-500">คนไข้ทั้งหมด</p><p class="text-2xl font-bold">${totalPatients.toLocaleString('th-TH')}</p></div>`;
+    }
+
+    // --- 5. Core Annual View Functions ---
+    async function displayAnnualSummary(year) {
+        annualViewYear.textContent = year;
+        const { data, error } = await supabaseClient
+            .from('daily_records')
+            .select('*')
+            .gte('date', `${year-1}-12-26`)
+            .lte('date', `${year}-12-25`);
+
+        if (error) {
+            showToast('เกิดข้อผิดพลาดในการดึงข้อมูลรายปี', true);
+            console.error(error);
+            return;
+        }
+
+        noDataAnnual.classList.toggle('hidden', data.length > 0);
+        if (annualChartInstance) annualChartInstance.destroy();
+        if (data.length === 0) return;
+
+        const monthsData = Array.from({ length: 12 }, () => ({ income: 0, lab: 0 }));
+
+        data.forEach(record => {
+            const recordDate = new Date(record.date);
+            let monthIndex = recordDate.getMonth(); // 0-11
+            
+            if (recordDate.getDate() >= 26) {
+                monthIndex = (monthIndex + 1) % 12;
+            }
+            monthsData[monthIndex].income += record.income;
+            monthsData[monthIndex].lab += record.lab_cost;
+        });
+
+        renderAnnualChart(monthsData);
+    }
+    
+    function renderAnnualChart(data) {
+        const labels = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+        const incomeData = data.map(m => m.income);
+        const labData = data.map(m => m.lab);
+        const actualData = data.map(m => (m.income - m.lab) / 2);
+
+        annualChartInstance = new Chart(annualChartCanvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'รายรับรวม', data: incomeData, backgroundColor: 'rgba(22, 163, 74, 0.6)'},
+                    { label: 'รับจริง', data: actualData, backgroundColor: 'rgba(37, 99, 235, 0.6)'},
+                    { label: 'ค่า Lab', data: labData, backgroundColor: 'rgba(220, 38, 38, 0.6)'}
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, ticks: { callback: value => value.toLocaleString('th-TH') + ' ฿' }}},
+                plugins: { tooltip: { callbacks: { label: context => `${context.dataset.label || ''}: ${formatCurrency(context.parsed.y)} ฿`}}}
+            }
+        });
+    }
+
+    // --- 6. Data Manipulation & UI Switching ---
+    async function addRecord(event) {
+        event.preventDefault();
+        const newRecord = {
+            date: document.getElementById('date').value,
+            income: parseFloat(document.getElementById('income').value),
+            lab_cost: parseFloat(document.getElementById('lab_cost').value),
+            patient_count: parseInt(document.getElementById('patient_count').value),
+            notes: document.getElementById('notes').value
+        };
+        const { error } = await supabaseClient.from('daily_records').insert([newRecord]);
+        if (error) {
+            showToast('เกิดข้อผิดพลาด: ' + error.message, true);
+        } else {
+            showToast('บันทึกข้อมูลสำเร็จ!');
+            recordForm.reset();
+            document.getElementById('date').valueAsDate = new Date();
+            refreshCurrentView();
+        }
+    }
+    
+    async function deleteRecord(id) {
+        const { error } = await supabaseClient.from('daily_records').delete().match({ id: id });
+        if (error) { showToast('เกิดข้อผิดพลาดในการลบ', true); }
+        else { showToast('ลบรายการสำเร็จแล้ว'); refreshCurrentView(); }
+        closeDeleteModal();
+    }
+    
+    function refreshCurrentView() {
+        if (!monthlyView.classList.contains('hidden')) {
+            const [year, month] = monthFilter.value.split('-').map(Number);
+            fetchMonthlyRecords(year, month);
+        } else {
+            const year = parseInt(yearFilter.value);
+            displayAnnualSummary(year);
+        }
+    }
+    
+    function switchView(viewToShow) {
+        const isMonthly = viewToShow === 'monthly';
+        monthlyView.classList.toggle('hidden', !isMonthly);
+        annualView.classList.toggle('hidden', isMonthly);
+        monthlyFilterContainer.classList.toggle('hidden', !isMonthly);
+        annualFilterContainer.classList.toggle('hidden', isMonthly);
+        
+        showMonthlyViewBtn.classList.toggle('bg-cyan-600', isMonthly);
+        showMonthlyViewBtn.classList.toggle('text-white', isMonthly);
+        showMonthlyViewBtn.classList.toggle('bg-gray-200', !isMonthly);
+        
+        showAnnualViewBtn.classList.toggle('bg-cyan-600', !isMonthly);
+        showAnnualViewBtn.classList.toggle('text-white', !isMonthly);
+        showAnnualViewBtn.classList.toggle('bg-gray-200', isMonthly);
+        
+        if (isMonthly) { refreshCurrentView(); }
+        else { displayAnnualSummary(parseInt(yearFilter.value)); }
+    }
+
+    function openDeleteModal(id) { recordIdToDelete = id; deleteModal.classList.remove('hidden'); }
+    function closeDeleteModal() { recordIdToDelete = null; deleteModal.classList.add('hidden'); }
+
+    // --- 7. Auth Functions ---
+    async function handleLogin(event) {
+        event.preventDefault();
+        const email = loginForm.email.value;
+        const password = loginForm.password.value;
+        loginMessage.textContent = '';
+        loginMessage.classList.add('hidden');
+
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+        if (error) {
+            console.error('Login error:', error.message);
+            loginMessage.textContent = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+            loginMessage.classList.remove('hidden');
+        }
+        // onAuthStateChange will handle successful login
+    }
+
+    async function handleLogout() {
+        const { error } = await supabaseClient.auth.signOut();
+        if (error) {
+            console.error('Logout error:', error.message);
+            showToast('เกิดข้อผิดพลาดในการออกจากระบบ', true);
+        }
+        // onAuthStateChange will handle successful logout
+    }
+
+    // --- 8. Event Listeners ---
+    loginForm.addEventListener('submit', handleLogin);
+    logoutBtn.addEventListener('click', handleLogout);
+    recordForm.addEventListener('submit', addRecord);
+    monthFilter.addEventListener('change', refreshCurrentView);
+    yearFilter.addEventListener('change', refreshCurrentView);
+    showMonthlyViewBtn.addEventListener('click', () => switchView('monthly'));
+    showAnnualViewBtn.addEventListener('click', () => switchView('annual'));
+    recordsTableBody.addEventListener('click', (event) => {
+        if (event.target.classList.contains('delete-btn')) {
+            openDeleteModal(event.target.getAttribute('data-id'));
+        }
+    });
+    cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+    confirmDeleteBtn.addEventListener('click', () => { if (recordIdToDelete) deleteRecord(recordIdToDelete); });
+
+    // --- 9. Initial Page Load and Auth State Handling ---
+    function initializeApp() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth() + 1;
+        
+        monthFilter.value = `${year}-${String(month).padStart(2, '0')}`;
+        yearFilter.value = year;
+        document.getElementById('date').valueAsDate = today;
+        
+        fetchMonthlyRecords(year, month);
+    }
+
+    // Listen for auth state changes (login/logout)
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (session) {
+            // User is logged in
+            authContainer.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            initializeApp(); // Load the main application data
+        } else {
+            // User is logged out
+            authContainer.classList.remove('hidden');
+            appContainer.classList.add('hidden');
+        }
+    });
+</script>
+
+</body>
+</html>
+
