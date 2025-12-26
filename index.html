@@ -169,7 +169,13 @@
 
                         <!-- Annual View -->
                         <div id="annualView" class="hidden">
-                            <h2 class="text-2xl font-bold text-cyan-600 mb-4">สรุปข้อมูลรายปี <span id="annualViewYear"></span></h2>
+                            <h2 class="text-2xl font-bold text-cyan-600 mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                สรุปข้อมูลภาพรวมรายปี <span id="annualViewYear"></span>
+                            </h2>
+                            <!-- Annual Summary Cards -->
+                            <div id="annual-summary-cards" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mb-8"></div>
+
                             <div class="mb-6 h-[400px]">
                                 <canvas id="annualChart"></canvas>
                             </div>
@@ -269,6 +275,7 @@
     const recordForm = document.getElementById('recordForm');
     const recordsTableBody = document.getElementById('recordsTableBody');
     const summaryCardsContainer = document.getElementById('summary-cards');
+    const annualSummaryCardsContainer = document.getElementById('annual-summary-cards');
     const noDataMonthly = document.getElementById('no-data-monthly');
     const annualChartCanvas = document.getElementById('annualChart').getContext('2d');
     const annualViewYear = document.getElementById('annualViewYear');
@@ -323,7 +330,7 @@
         if (!data || data.length === 0) return;
         
         let totalIncome = 0, totalLabCost = 0, totalPatients = 0;
-        const daysWorked = data.length; // Each entry represents one clinical day
+        const daysWorked = data.length;
 
         data.forEach(record => {
             const netBeforeSplit = record.income - record.lab_cost;
@@ -352,7 +359,6 @@
         const totalNetBeforeSplit = totalIncome - totalLabCost;
         const totalNetTakeHome = totalNetBeforeSplit / 2;
 
-        // Populate Summary Cards
         const cardClass = "p-5 rounded-xl shadow-sm border-l-4 card";
         summaryCardsContainer.innerHTML = `
             <div class="${cardClass} bg-green-50 border-green-500 summary-card">
@@ -384,6 +390,7 @@
 
     async function displayAnnualSummary(year) {
         annualViewYear.textContent = year;
+        // Accounting cycle for the whole year (spanning Dec 26 of previous year to Dec 25 of current year)
         const { data, error } = await supabaseClient
             .from('daily_records')
             .select('*')
@@ -393,8 +400,15 @@
         if (error) { showToast('ดึงข้อมูลรายปีล้มเหลว', true); return; }
 
         noDataAnnual.classList.toggle('hidden', data && data.length > 0);
+        annualSummaryCardsContainer.innerHTML = '';
         if (annualChartInstance) annualChartInstance.destroy();
+        
         if (!data || data.length === 0) return;
+
+        let annualTotalIncome = 0;
+        let annualTotalLab = 0;
+        let annualTotalPatients = 0;
+        const annualDaysWorked = data.length;
 
         const monthlyStats = Array.from({ length: 12 }, () => ({ income: 0, net: 0, days: 0 }));
 
@@ -402,10 +416,47 @@
             const d = new Date(record.date);
             let mIdx = d.getMonth();
             if (d.getDate() >= 26) mIdx = (mIdx + 1) % 12;
+            
             monthlyStats[mIdx].income += record.income;
             monthlyStats[mIdx].net += (record.income - record.lab_cost) / 2;
             monthlyStats[mIdx].days += 1;
+
+            annualTotalIncome += record.income;
+            annualTotalLab += record.lab_cost;
+            annualTotalPatients += record.patient_count;
         });
+
+        const annualNetBeforeSplit = annualTotalIncome - annualTotalLab;
+        const annualNetTakeHome = annualNetBeforeSplit / 2;
+
+        // Render Annual Overall Summary Cards
+        const cardClass = "p-5 rounded-xl shadow-sm border-l-4 card";
+        annualSummaryCardsContainer.innerHTML = `
+            <div class="${cardClass} bg-green-50 border-green-500 summary-card">
+                <p class="text-xs text-green-700 font-bold uppercase tracking-wider mb-1">รายรับรวมทั้งปี</p>
+                <p class="text-2xl font-black text-green-800">฿${formatCurrency(annualTotalIncome)}</p>
+            </div>
+            <div class="${cardClass} bg-red-50 border-red-500 summary-card">
+                <p class="text-xs text-red-700 font-bold uppercase tracking-wider mb-1">ค่า Lab รวมทั้งปี</p>
+                <p class="text-2xl font-black text-red-800">฿${formatCurrency(annualTotalLab)}</p>
+            </div>
+            <div class="${cardClass} bg-orange-50 border-orange-500 summary-card">
+                <p class="text-xs text-orange-700 font-bold uppercase tracking-wider mb-1">รายรับรวมหลังหัก Lab</p>
+                <p class="text-2xl font-black text-orange-800">฿${formatCurrency(annualNetBeforeSplit)}</p>
+            </div>
+            <div class="${cardClass} bg-cyan-50 border-cyan-500 summary-card">
+                <p class="text-xs text-cyan-700 font-bold uppercase tracking-wider mb-1">รายได้สุทธิส่วนตัวทั้งปี</p>
+                <p class="text-2xl font-black text-cyan-800">฿${formatCurrency(annualNetTakeHome)}</p>
+            </div>
+            <div class="${cardClass} bg-purple-50 border-purple-500 summary-card">
+                <p class="text-xs text-purple-700 font-bold uppercase tracking-wider mb-1">จำนวนวันที่ลงคลินิกทั้งปี</p>
+                <p class="text-2xl font-black text-purple-800">${annualDaysWorked} วัน</p>
+            </div>
+            <div class="${cardClass} bg-blue-50 border-blue-500 summary-card">
+                <p class="text-xs text-blue-700 font-bold uppercase tracking-wider mb-1">คนไข้รวมทั้งปี</p>
+                <p class="text-2xl font-black text-blue-800">${annualTotalPatients.toLocaleString('th-TH')} ราย</p>
+            </div>
+        `;
 
         renderAnnualChart(monthlyStats);
     }
